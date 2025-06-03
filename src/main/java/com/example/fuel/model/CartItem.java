@@ -1,9 +1,13 @@
 package com.example.fuel.model;
 
+import com.example.fuel.strategy.PricingStrategy;
+
 /**
  * Элемент корзины:
  * либо содержит FuelProduct с указанным количеством литров,
  * либо ServiceProduct (quantity = 1 всегда).
+ *
+ * Теперь содержит ссылку на стратегию расчёта стоимости.
  */
 public class CartItem {
     private int id;
@@ -11,6 +15,9 @@ public class CartItem {
     private String itemType;   // "PRODUCT" или "SERVICE"
     private int itemId;        // id из таблицы products или services
     private double quantity;   // литры или 1.0 для услуги
+
+    // Стратегия для расчёта стоимости этого элемента
+    private PricingStrategy pricingStrategy;
 
     public CartItem() {}
 
@@ -64,6 +71,24 @@ public class CartItem {
 
     public void setQuantity(double quantity) {
         this.quantity = quantity;
+    }
+
+    /**
+     * Установить стратегию расчёта стоимости для этого элемента.
+     */
+    public void setPricingStrategy(PricingStrategy pricingStrategy) {
+        this.pricingStrategy = pricingStrategy;
+    }
+
+    /**
+     * Получить стоимость элемента корзины, делегируя расчёт стратегии.
+     * Если стратегия не задана — выбрасываем исключение.
+     */
+    public double calculatePrice() {
+        if (pricingStrategy == null) {
+            throw new IllegalStateException("Не установлена стратегия расчёта стоимости для CartItem");
+        }
+        return pricingStrategy.calculatePrice(this);
     }
 
     @Override

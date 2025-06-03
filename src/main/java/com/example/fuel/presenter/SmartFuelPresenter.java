@@ -22,11 +22,16 @@ public class SmartFuelPresenter {
 
     private final ProductService productService = new ProductService();
     private final CustomerService customerService = new CustomerService();
-    private final CartService cartService = new CartService();
+    private final CartService cartService;
     private final PaymentService paymentService = new PaymentService();
 
     /** Сколько уже оплатил клиент частями (по customerId). */
     private final Map<Integer, Double> paidMap = new HashMap<>();
+
+    public SmartFuelPresenter() {
+        // Инициализируем CartService с передачей productService
+        this.cartService = new CartService(productService);
+    }
 
     // 1) Продукты и услуги
 
@@ -71,7 +76,7 @@ public class SmartFuelPresenter {
 
     /** Полная стоимость корзины (не учитывая частичные платежи) */
     public double getCartTotal(int customerId) {
-        return cartService.calculateCartTotal(customerId, productService);
+        return cartService.calculateCartTotal(customerId);
     }
 
     /** Сброс "оплачено частями" для данного клиента */
@@ -90,6 +95,11 @@ public class SmartFuelPresenter {
         double paid = getPaid(customerId);
         double remaining = total - paid;
         return remaining < 0 ? 0 : remaining;
+    }
+
+    public boolean isItemInCart(int customerId, String type, int itemId) {
+        return cartService.getCartItems(customerId).stream()
+                .anyMatch(item -> item.getItemType().equals(type) && item.getItemId() == itemId);
     }
 
     // 3) Полная оплата

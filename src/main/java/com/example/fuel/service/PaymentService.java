@@ -6,7 +6,6 @@ import com.example.fuel.DAO.CustomerDAO;
 import com.example.fuel.DAO.CustomerDAOImpl;
 import com.example.fuel.model.CartItem;
 import com.example.fuel.model.Customer;
-import com.example.fuel.model.FuelProduct;
 import com.example.fuel.model.PaymentMethod;
 import com.example.fuel.model.ServiceProduct;
 
@@ -32,21 +31,21 @@ public class PaymentService {
         if (cust == null) return false;
 
         switch (method) {
-            case CASH:
+            case Наличные:
                 if (cust.getWalletBalance() >= amount) {
                     cust.setWalletBalance(cust.getWalletBalance() - amount);
                 } else {
                     return false;
                 }
                 break;
-            case CARD:
+            case Карта:
                 if (cust.getCardBalance() >= amount) {
                     cust.setCardBalance(cust.getCardBalance() - amount);
                 } else {
                     return false;
                 }
                 break;
-            case BONUS:
+            case Бонусы:
                 if (cust.getBonusPoints() >= amount) {
                     cust.setBonusPoints(cust.getBonusPoints() - amount);
                 } else {
@@ -67,17 +66,17 @@ public class PaymentService {
         if (cust == null) return false;
 
         switch (method) {
-            case CASH:
+            case Наличные:
                 if (cust.getWalletBalance() >= sum) {
                     cust.setWalletBalance(cust.getWalletBalance() - sum);
                 } else return false;
                 break;
-            case CARD:
+            case Карта:
                 if (cust.getCardBalance() >= sum) {
                     cust.setCardBalance(cust.getCardBalance() - sum);
                 } else return false;
                 break;
-            case BONUS:
+            case Бонусы:
                 if (cust.getBonusPoints() >= sum) {
                     cust.setBonusPoints(cust.getBonusPoints() - sum);
                 } else return false;

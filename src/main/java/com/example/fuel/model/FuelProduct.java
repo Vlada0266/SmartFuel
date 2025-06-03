@@ -1,19 +1,17 @@
 package com.example.fuel.model;
 
 /**
- * Конкретный товар — "топливо".
- * isWeighted всегда true.
+ * FuelProduct — модель для топлива (хранится в таблице products).
+ * Наследуется от Product.
  */
 public class FuelProduct extends Product {
 
-    public FuelProduct() {
-        super();
-        setWeighted(true);
-    }
-
     public FuelProduct(int id, String name, double price, double stockQty) {
-        super(id, name, price, true, stockQty);
+        super(id, name, price, stockQty);
     }
 
-    // Никаких дополнительных полей не нужно.
+    @Override
+    public String getProductType() {
+        return "Fuel";
+    }
 }

@@ -1,23 +1,20 @@
 package com.example.fuel.model;
 
 /**
- * Абстрактная сущность "товар".
- * Поле isWeighted = true → нужно указывать количество (литры).
+ * Абстрактный класс Product — общая основа для всех товаров и услуг.
+ * У каждого продукта есть ID, название, цена и количество (stockQty).
+ * Наследуется классами FuelProduct и ServiceProduct.
  */
 public abstract class Product {
-    private int id;
-    private String name;
-    private double price;
-    private boolean isWeighted;
-    private double stockQty;
+    protected int id;
+    protected String name;
+    protected double price;
+    protected double stockQty;
 
-    public Product() {}
-
-    public Product(int id, String name, double price, boolean isWeighted, double stockQty) {
+    public Product(int id, String name, double price, double stockQty) {
         this.id = id;
         this.name = name;
         this.price = price;
-        this.isWeighted = isWeighted;
         this.stockQty = stockQty;
     }
 
@@ -33,37 +30,16 @@ public abstract class Product {
         return price;
     }
 
-    public boolean isWeighted() {
-        return isWeighted;
-    }
-
     public double getStockQty() {
         return stockQty;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public void setPrice(double price) {
-        this.price = price;
-    }
-
-    public void setWeighted(boolean weighted) {
-        isWeighted = weighted;
     }
 
     public void setStockQty(double stockQty) {
         this.stockQty = stockQty;
     }
 
-    @Override
-    public String toString() {
-        String weightedStr = isWeighted ? " (литры)" : " (шт.)";
-        return String.format("%s [ID=%d, цена=%.2f%s, в наличии=%.2f]", name, id, price, weightedStr, stockQty);
-    }
+    /**
+     * Абстрактный метод — возвращает тип продукта (используется при отображении или логике).
+     */
+    public abstract String getProductType();
 }

@@ -65,14 +65,14 @@ public class DatabaseInitializer {
         INSERT INTO products (name, price, is_weighted, stock_qty) VALUES
         ('АИ-95', 56.0, 1, 10000.0),
         ('Дизель', 50.0, 1, 8000.0),
-        ('Электро', 8.0, 1, 5000.0);
+        ('АИ-98', 86.0, 1, 5000.0);
         """;
 
     private static final String INSERT_INITIAL_SERVICES = """
         INSERT INTO services (name, price) VALUES
         ('Автомойка', 300.0),
         ('Подкачка шин', 150.0),
-        ('Кофе', 70.0);
+        ('Замена масла', 500.0);
         """;
 
     private static final String INSERT_INITIAL_CUSTOMER = """

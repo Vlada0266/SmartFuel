@@ -1,19 +1,17 @@
 package com.example.fuel.model;
 
 /**
- * Конкретный товар — "услуга".
- * isWeighted всегда false, quantity = целое число (1 услуга).
+ * ServiceProduct — модель для услуги (хранится в таблице services).
+ * Наследуется от Product.
  */
 public class ServiceProduct extends Product {
 
-    public ServiceProduct() {
-        super();
-        setWeighted(false);
-    }
-
     public ServiceProduct(int id, String name, double price, double stockQty) {
-        super(id, name, price, false, stockQty);
+        super(id, name, price, stockQty);
     }
 
-    // quantity всегда 1; stockQty отражает сколько услуг осталось.
+    @Override
+    public String getProductType() {
+        return "Service";
+    }
 }

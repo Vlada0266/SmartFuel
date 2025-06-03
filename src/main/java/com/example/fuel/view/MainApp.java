@@ -39,12 +39,9 @@ public class MainApp extends Application {
 
     // Вкладка Топливо
     private TableView<FuelProduct> fuelTable;
-    private TextField tfFuelId;
-    private TextField tfFuelQty;
 
     // Вкладка Услуги
     private TableView<ServiceProduct> serviceTable;
-    private TextField tfServiceId;
 
     // Вкладка Корзина
     private TableView<CartRow> cartTable;
@@ -148,65 +145,123 @@ public class MainApp extends Application {
         colName.setPrefWidth(200);
 
         TableColumn<FuelProduct, Double> colPrice = new TableColumn<>("Цена/л");
-        colPrice.setCellValueFactory(cell -> new SimpleDoubleProperty(cell.getValue().getPrice()).asObject());
+        colPrice.setCellValueFactory(cell ->
+                new SimpleDoubleProperty(cell.getValue().getPrice()).asObject());
         colPrice.setPrefWidth(100);
 
         TableColumn<FuelProduct, Double> colStock = new TableColumn<>("В наличии");
-        colStock.setCellValueFactory(cell -> new SimpleDoubleProperty(cell.getValue().getStockQty()).asObject());
+        colStock.setCellValueFactory(cell ->
+                new SimpleDoubleProperty(cell.getValue().getStockQty()).asObject());
         colStock.setPrefWidth(100);
 
-        fuelTable.getColumns().addAll(colId, colName, colPrice, colStock);
+        // --- ИЗМЕНЕНО: добавляем колонку "В корзине (л)" ---
+        TableColumn<FuelProduct, String> colInCart = new TableColumn<>("В корзине (л)");
+        colInCart.setCellValueFactory(cellData -> {
+            FuelProduct fuel = cellData.getValue();
+            List<CartItem> cartItems = presenter.getCartItems(CUSTOMER_ID);
+            Optional<CartItem> match = cartItems.stream()
+                    .filter(ci -> ci.getItemType().equals("PRODUCT") && ci.getItemId() == fuel.getId())
+                    .findFirst();
+            return new SimpleStringProperty(match
+                    .map(ci -> String.format("%.2f", ci.getQuantity()))
+                    .orElse(""));
+        });
+        colInCart.setPrefWidth(100);
+
+        fuelTable.getColumns().addAll(colId, colName, colPrice, colStock, colInCart);
         root.setCenter(fuelTable);
+
+        Button btnAdd = new Button("Добавить в корзину");
+        Button btnRemove = new Button("Выложить из корзины");
+
+        btnAdd.setDisable(true);
+        btnRemove.setDisable(true);
+
+        // Активируем кнопки при выборе топлива
+        fuelTable.getSelectionModel().selectedItemProperty().addListener((obs, oldSel, newSel) -> {
+            boolean disable = newSel == null;
+            btnAdd.setDisable(disable);
+            btnRemove.setDisable(disable);
+        });
+
+        btnAdd.setOnAction(e -> onAddFuel());
+        btnRemove.setOnAction(e -> onRemoveFuelFromCart());
 
         HBox bottomBox = new HBox(10);
         bottomBox.setPadding(new Insets(10, 0, 0, 0));
+        bottomBox.getChildren().addAll(btnAdd, btnRemove);
 
-        tfFuelId = new TextField();
-        tfFuelId.setPromptText("ID топлива");
-        tfFuelId.setPrefWidth(80);
-
-        tfFuelQty = new TextField();
-        tfFuelQty.setPromptText("Кол-во литров");
-        tfFuelQty.setPrefWidth(100);
-
-        Button btnAdd = new Button("Добавить в корзину");
-        btnAdd.setOnAction(e -> onAddFuel());
-
-        bottomBox.getChildren().addAll(new Label("ID:"), tfFuelId, new Label("Литров:"), tfFuelQty, btnAdd);
         root.setBottom(bottomBox);
 
         return root;
+    }
+
+    /**
+     * Теперь при добавлении топлива:
+     * - Если введено некорректное число или пустая строка → qty=0
+     * - Сам элемент добавляется в корзину вне зависимости от qty
+     */
+    private void onAddFuel() {
+        FuelProduct selected = fuelTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert("Внимание", "Выберите топливо из таблицы.");
+            return;
+        }
+        // Запросить количество через диалог (может быть пусто или нечисловое)
+        TextInputDialog qtyDialog = new TextInputDialog();
+        qtyDialog.setTitle("Количество литров");
+        qtyDialog.setHeaderText("Введите количество литров для \"" + selected.getName() +
+                "\" (макс " + selected.getStockQty() + "):");
+        Optional<String> res = qtyDialog.showAndWait();
+        double qty;
+        if (res.isEmpty()) {
+            qty = 0.0;
+        } else {
+            try {
+                qty = Double.parseDouble(res.get().trim());
+            } catch (NumberFormatException ex) {
+                qty = 0.0;
+            }
+        }
+        // Добавляем в корзину (даже если qty == 0)
+        presenter.addToCart(CUSTOMER_ID, "PRODUCT", selected.getId(), qty);
+        showAlert("Успех", "Топливо добавлено в корзину (количество: " + String.format("%.2f", qty) + ").");
+
+        loadFuelData();
+        loadCartData();
+        updateBalances();
+    }
+
+    private void onRemoveFuelFromCart() {
+        FuelProduct selected = fuelTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert("Внимание", "Выберите топливо из таблицы.");
+            return;
+        }
+        List<CartItem> cartItems = presenter.getCartItems(CUSTOMER_ID);
+        Optional<CartItem> toRemove = cartItems.stream()
+                .filter(ci -> ci.getItemType().equals("PRODUCT") && ci.getItemId() == selected.getId())
+                .findFirst();
+
+        if (toRemove.isEmpty()) {
+            showAlert("Информация", "Данное топливо отсутствует в корзине.");
+            return;
+        }
+
+        presenter.removeCartItemById(toRemove.get().getId(), CUSTOMER_ID);
+        showAlert("Успех", "Топливо удалено из корзины.");
+        loadCartData();
+        loadFuelData();
+        updateBalances();
     }
 
     private void loadFuelData() {
         List<FuelProduct> list = presenter.getAllFuel();
         ObservableList<FuelProduct> obs = FXCollections.observableArrayList(list);
         fuelTable.setItems(obs);
+        fuelTable.refresh();  // обновить колонку "В корзине"
     }
 
-    private void onAddFuel() {
-        try {
-            int id = Integer.parseInt(tfFuelId.getText().trim());
-            double qty = Double.parseDouble(tfFuelQty.getText().trim());
-            FuelProduct p = presenter.getAllFuel().stream()
-                    .filter(fp -> fp.getId() == id).findFirst().orElse(null);
-            if (p == null) {
-                showAlert("Ошибка", "Топливо с ID " + id + " не найдено.");
-                return;
-            }
-            if (qty <= 0 || qty > p.getStockQty()) {
-                showAlert("Ошибка", "Некорректное количество литров.");
-                return;
-            }
-            presenter.addToCart(CUSTOMER_ID, "PRODUCT", id, qty);
-            showAlert("Успех", "Топливо добавлено в корзину.");
-            loadFuelData();
-            loadCartData();
-            updateBalances();
-        } catch (NumberFormatException ex) {
-            showAlert("Ошибка", "Введите корректные числа в поля ID и литры.");
-        }
-    }
 
     // -----------------------------
     // Панель "Услуги"
@@ -231,52 +286,96 @@ public class MainApp extends Application {
         colSname.setPrefWidth(200);
 
         TableColumn<ServiceProduct, Double> colSprice = new TableColumn<>("Цена");
-        colSprice.setCellValueFactory(cell -> new SimpleDoubleProperty(cell.getValue().getPrice()).asObject());
+        colSprice.setCellValueFactory(cell ->
+                new SimpleDoubleProperty(cell.getValue().getPrice()).asObject());
         colSprice.setPrefWidth(100);
 
-        serviceTable.getColumns().addAll(colSid, colSname, colSprice);
+        // --- ИЗМЕНЕНО: добавляем колонку "В корзине (шт)" ---
+        TableColumn<ServiceProduct, String> colInCart = new TableColumn<>("В корзине (шт)");
+        colInCart.setCellValueFactory(cellData -> {
+            ServiceProduct service = cellData.getValue();
+            List<CartItem> cartItems = presenter.getCartItems(CUSTOMER_ID);
+            Optional<CartItem> match = cartItems.stream()
+                    .filter(ci -> ci.getItemType().equals("SERVICE") && ci.getItemId() == service.getId())
+                    .findFirst();
+            return new SimpleStringProperty(match
+                    .map(ci -> String.format("%.0f", ci.getQuantity()))
+                    .orElse(""));
+        });
+        colInCart.setPrefWidth(100);
+
+        serviceTable.getColumns().addAll(colSid, colSname, colSprice, colInCart);
         root.setCenter(serviceTable);
+
+        Button btnAdd = new Button("Добавить в корзину");
+        Button btnRemove = new Button("Выложить из корзины");
+
+        btnAdd.setDisable(true);
+        btnRemove.setDisable(true);
+
+        // Активируем кнопки при выборе услуги
+        serviceTable.getSelectionModel().selectedItemProperty().addListener((obs, oldSel, newSel) -> {
+            boolean disable = newSel == null;
+            btnAdd.setDisable(disable);
+            btnRemove.setDisable(disable);
+        });
+
+        btnAdd.setOnAction(e -> onAddService());
+        btnRemove.setOnAction(e -> onRemoveServiceFromCart());
 
         HBox bottomBox = new HBox(10);
         bottomBox.setPadding(new Insets(10, 0, 0, 0));
+        bottomBox.getChildren().addAll(btnAdd, btnRemove);
 
-        tfServiceId = new TextField();
-        tfServiceId.setPromptText("ID услуги");
-        tfServiceId.setPrefWidth(80);
-
-        Button btnAdd = new Button("Добавить в корзину");
-        btnAdd.setOnAction(e -> onAddService());
-
-        bottomBox.getChildren().addAll(new Label("ID услуги:"), tfServiceId, btnAdd);
         root.setBottom(bottomBox);
 
         return root;
+    }
+
+    private void onAddService() {
+        ServiceProduct selected = serviceTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert("Внимание", "Выберите услугу из таблицы.");
+            return;
+        }
+        // Для услуги количество всегда = 1
+        presenter.addToCart(CUSTOMER_ID, "SERVICE", selected.getId(), 1.0);
+        showAlert("Успех", "Услуга добавлена в корзину.");
+        loadServiceData();
+        loadCartData();
+        updateBalances();
+    }
+
+    private void onRemoveServiceFromCart() {
+        ServiceProduct selected = serviceTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert("Внимание", "Выберите услугу из таблицы.");
+            return;
+        }
+        List<CartItem> cartItems = presenter.getCartItems(CUSTOMER_ID);
+        Optional<CartItem> toRemove = cartItems.stream()
+                .filter(ci -> ci.getItemType().equals("SERVICE") && ci.getItemId() == selected.getId())
+                .findFirst();
+
+        if (toRemove.isEmpty()) {
+            showAlert("Информация", "Данная услуга отсутствует в корзине.");
+            return;
+        }
+
+        presenter.removeCartItemById(toRemove.get().getId(), CUSTOMER_ID);
+        showAlert("Успех", "Услуга удалена из корзины.");
+        loadCartData();
+        loadServiceData();
+        updateBalances();
     }
 
     private void loadServiceData() {
         List<ServiceProduct> list = presenter.getAllServices();
         ObservableList<ServiceProduct> obs = FXCollections.observableArrayList(list);
         serviceTable.setItems(obs);
+        serviceTable.refresh();  // обновить колонку "В корзине"
     }
 
-    private void onAddService() {
-        try {
-            int id = Integer.parseInt(tfServiceId.getText().trim());
-            ServiceProduct s = presenter.getAllServices().stream()
-                    .filter(sp -> sp.getId() == id).findFirst().orElse(null);
-            if (s == null) {
-                showAlert("Ошибка", "Услуга с ID " + id + " не найдена.");
-                return;
-            }
-            presenter.addToCart(CUSTOMER_ID, "SERVICE", id, 1.0);
-            showAlert("Успех", "Услуга добавлена в корзину.");
-            loadServiceData();
-            loadCartData();
-            updateBalances();
-        } catch (NumberFormatException ex) {
-            showAlert("Ошибка", "Введите корректный ID услуги.");
-        }
-    }
 
     // -----------------------------
     // Панель "Корзина"
@@ -380,6 +479,7 @@ public class MainApp extends Application {
         lblTotal.setText(
                 String.format("%.2f", remaining) + " (из " + String.format("%.2f", total) + ")"
         );
+        cartTable.refresh();
     }
 
     private void onDeleteSelectedItem() {
@@ -392,10 +492,58 @@ public class MainApp extends Application {
         showAlert("Успех", "Элемент удалён из корзины.");
         loadCartData();
         loadFuelData();
+        loadServiceData();
         updateBalances();
     }
 
+    /**
+     * Проверяет содержимое корзины:
+     * 1) У каждого топлива (itemType = "PRODUCT") quantity > 0.
+     * 2) Общая стоимость не превышает общий баланс (наличные + карта + бонусы).
+     * Если что-то не так, возвращает строку с текстом ошибки, иначе — null.
+     */
+    private String validateCart() {
+        List<CartItem> items = presenter.getCartItems(CUSTOMER_ID);
+
+        // 1) Проверка, что для топлива указано количество > 0
+        for (CartItem ci : items) {
+            if ("PRODUCT".equals(ci.getItemType())) {
+                if (ci.getQuantity() <= 0) {
+                    // Найдём имя топлива
+                    FuelProduct p = presenter.getAllFuel().stream()
+                            .filter(fp -> fp.getId() == ci.getItemId())
+                            .findFirst().orElse(null);
+                    String name = (p != null ? p.getName() : ("ID=" + ci.getItemId()));
+                    return "Топливо \"" + name + "\" не взвешено. Укажите количество литров.";
+                }
+            }
+        }
+
+        // 2) Проверка средств: сумма цен всех позиций vs суммарный баланс клиента
+        double totalCost = presenter.getCartTotal(CUSTOMER_ID);
+        Customer c = presenter.getCustomer(CUSTOMER_ID);
+        if (c == null) {
+            return "Ошибка: клиент не найден.";
+        }
+        double combinedBalance = c.getWalletBalance() + c.getCardBalance() + c.getBonusPoints();
+        if (totalCost > combinedBalance) {
+            return String.format(
+                    "Недостаточно средств. Стоимость корзины: %.2f, доступно: %.2f.",
+                    totalCost, combinedBalance
+            );
+        }
+
+        return null; // всё верно
+    }
+
     private void onFullCheckout() {
+        // Сначала проверим корзину
+        String error = validateCart();
+        if (error != null) {
+            showAlert("Ошибка", error);
+            return;
+        }
+
         double remaining = presenter.getRemaining(CUSTOMER_ID);
         if (remaining <= 0) {
             showAlert("Информация", "Корзина пуста или уже всё оплачено.");
@@ -403,7 +551,7 @@ public class MainApp extends Application {
         }
 
         ChoiceDialog<PaymentMethod> choiceDialog =
-                new ChoiceDialog<>(PaymentMethod.CASH, PaymentMethod.values());
+                new ChoiceDialog<>(PaymentMethod.Наличные, PaymentMethod.values());
         choiceDialog.setTitle("Полная оплата");
         choiceDialog.setHeaderText(
                 "Сумма к оплате: " + String.format("%.2f", remaining) +
@@ -418,21 +566,28 @@ public class MainApp extends Application {
             showAlert("Успех", "Полная оплата (" + method + ") прошла успешно.");
             loadCartData();
             loadFuelData();
+            loadServiceData();
             updateBalances();
         } else {
             showAlert("Ошибка", "Недостаточно средств (" + method + ") для полной оплаты.");
-            // можно предложить удалять элементы, как раньше
         }
     }
 
     private void onPartialCheckout() {
+        // Сначала проверим корзину (в том числе взвешенность топлива)
+        String error = validateCart();
+        if (error != null) {
+            showAlert("Ошибка", error);
+            return;
+        }
+
         double remaining = presenter.getRemaining(CUSTOMER_ID);
         if (remaining <= 0) {
             showAlert("Информация", "Корзина пуста или уже всё оплачено.");
             return;
         }
 
-        // 1) Ввод суммы для списания
+        // Ввод суммы
         TextInputDialog inputDialog = new TextInputDialog();
         inputDialog.setTitle("Частичная оплата");
         inputDialog.setHeaderText(
@@ -453,38 +608,34 @@ public class MainApp extends Application {
             return;
         }
 
-        // 2) Выбор метода оплаты
+        // Выбор метода оплаты
         ChoiceDialog<PaymentMethod> choiceDialog =
-                new ChoiceDialog<>(PaymentMethod.CASH, PaymentMethod.values());
+                new ChoiceDialog<>(PaymentMethod.Наличные, PaymentMethod.values());
         choiceDialog.setTitle("Частичная оплата");
         choiceDialog.setHeaderText("Выберите способ оплаты для суммы " + String.format("%.2f", amount) + ":");
         Optional<PaymentMethod> methodResult = choiceDialog.showAndWait();
         if (methodResult.isEmpty()) return;
         PaymentMethod method = methodResult.get();
 
-        // 3) Пытаемся списать
         boolean ok = presenter.checkoutPartial(CUSTOMER_ID, method, amount);
         if (!ok) {
             showAlert("Ошибка", "Недостаточно средств по методу " + method + ".");
             return;
         }
 
-        // 4) После списания обновляем остаток
         double newRemaining = presenter.getRemaining(CUSTOMER_ID);
         if (newRemaining <= 0.000001) {
-            // Остаток к оплате равен нулю → считаем, что полный платёж завершён.
-            presenter.clearCart(CUSTOMER_ID);  // ЯВНО очищаем корзину
+            presenter.clearCart(CUSTOMER_ID);
             showAlert("Успех", "Вы полностью оплатили чек. Спасибо за покупку!");
-            loadCartData();
-            loadFuelData();
-            updateBalances();
         } else {
             showAlert("Успех", "Списано " + String.format("%.2f", amount)
                     + " (" + method + "). Осталось к оплате: " + String.format("%.2f", newRemaining));
-            loadCartData();
-            updateBalances();
-            // Остатки топлива не меняются при частичной оплате
         }
+
+        loadCartData();
+        loadFuelData();
+        loadServiceData();
+        updateBalances();
     }
 
 
